@@ -2,6 +2,7 @@ name: fgc-02
 
 volumes:
   sqlserver-data:
+  rabbitmq-data:
 
 services:
   sqlserver:
@@ -32,6 +33,8 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin123
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -48,8 +51,7 @@ services:
       - "8080:8080"
     restart: unless-stopped
     environment:
-      ASPNETCORE_ENVIRONMENT: Release
-      ConnectionStrings__Default: "Server=sqlserver;Database=UsersDb;User Id=sa;Password=rohPav-juKmeb-DIhku9!;TrustServerCertificate=True"
+      ConnectionStrings__Default: "Server=sqlserver;Database=FGC_User;User Id=sa;Password=rohPav-juKmeb-DIhku9!;TrustServerCertificate=True"
       Jwt__Issuer: fgcapi
       Jwt__Audience: fgcapi
       Jwt__Key: 8594df0eb5ecb4c96f8824462cc7d2e1885c138908f2f7b4357af54b72ab2ed6
@@ -66,6 +68,54 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+  catalog-service:
+    image: fgc-catalog-service:latest
+    build:
+      context: ../catalog-service
+      dockerfile: Dockerfile
+    container_name: fgc-catalog-service
+    hostname: catalog-service
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Default: "Server=sqlserver;Database=FGC_Catalog;User Id=sa;Password=rohPav-juKmeb-DIhku9!;TrustServerCertificate=True"
+      Jwt__Issuer: fgcapi
+      Jwt__Audience: fgcapi
+      Jwt__Key: 8594df0eb5ecb4c96f8824462cc7d2e1885c138908f2f7b4357af54b72ab2ed6
+      Jwt__TokenTtlInMinutes: 10      
+      RabbitMQ__URI: amqp://admin:admin123@fgc-rabbitmq:5672/
+      RabbitMQ__UserCreatedEvent__Exchange: fgc
+      RabbitMQ__UserCreatedEvent__RoutingKey: user.created
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+  payment-service:
+    image: fgc-catalog-service:latest
+    build:
+      context: ../payment-service
+      dockerfile: Dockerfile
+    container_name: fgc-payment-service
+    hostname: payment-service
+    ports:
+      - "8082:8080"
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Default: "Server=sqlserver;Database=FGC_Payment;User Id=sa;Password=rohPav-juKmeb-DIhku9!;TrustServerCertificate=True"
+      Jwt__Issuer: fgcapi
+      Jwt__Audience: fgcapi
+      Jwt__Key: 8594df0eb5ecb4c96f8824462cc7d2e1885c138908f2f7b4357af54b72ab2ed6
+      Jwt__TokenTtlInMinutes: 10      
+      RabbitMQ__URI: amqp://admin:admin123@fgc-rabbitmq:5672/
+      RabbitMQ__UserCreatedEvent__Exchange: fgc
+      RabbitMQ__UserCreatedEvent__RoutingKey: user.created
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
   notification-service:
     image: fgc-notification-service:latest
     build:
@@ -74,8 +124,7 @@ services:
     container_name: fgc-notification-service
     hostname: notification-service
     restart: unless-stopped
-    environment:
-      ASPNETCORE_ENVIRONMENT: Release      
+    environment:     
       RabbitMQ__URI: amqp://admin:admin123@fgc-rabbitmq:5672/
       RabbitMQ__UserCreatedEvent__Exchange: fgc
       RabbitMQ__UserCreatedEvent__RoutingKey: user.created
